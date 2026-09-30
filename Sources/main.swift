@@ -35,6 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var isOff = false
     var offAt = Date.distantPast
     var includeBuiltIn = UserDefaults.standard.bool(forKey: "includeBuiltIn")
+    var powerMode = UserDefaults.standard.object(forKey: "powerMode") as? Bool ?? true
+    var pollTimer: Timer?
     var wakeOnInput = UserDefaults.standard.object(forKey: "wakeOnInput") as? Bool ?? true
 
     func applicationDidFinishLaunching(_ n: Notification) {
@@ -76,6 +78,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                         "DisplayOff: display blanked" as CFString, &a)
             assertions.append(a)
         }
+        if powerMode {
+            powerOff()
+            updateUI()
+            return
+        }
         blank()
         if wakeOnInput {
             // Only real hardware input (source pid 0) wakes; synthetic events from automation don't.
@@ -87,9 +94,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateUI()
     }
 
+    // Real power-off: keep a virtual display so macOS (and screen capture) still has a screen,
+    // then put the physical display into DDC standby. It is woken with its own power button.
+    func powerOff() {
+        guard DOBridge.startVirtualDisplay() else {
+            NSLog("DisplayOff: virtual display failed, falling back to blanking")
+            powerMode = false
+            blank()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self = self, self.isOff else { return }
+            let n = DOBridge.standbyAllExternal()
+            NSLog("DisplayOff: DDC standby sent to %d display(s)", n)
+            self.offAt = Date()
+            // The physical display reappears (external DDC service returns) when its button is pressed.
+            self.pollTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                guard let self = self, Date().timeIntervalSince(self.offAt) > 5 else { return }
+                if DOBridge.externalDDCCount() > 0 { self.turnOn() }
+            }
+        }
+    }
+
     func turnOn() {
         guard isOff else { return }
         isOff = false
+        pollTimer?.invalidate(); pollTimer = nil
+        DOBridge.stopVirtualDisplay()
         if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
         CGDisplayRestoreColorSyncSettings()
         for (id, b) in saved { ds.setBrightness(id, b) }
@@ -100,6 +131,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func toggle() { isOff ? turnOn() : turnOff() }
+    @objc func togglePower() {
+        let wasOff = isOff; turnOn()
+        powerMode.toggle(); UserDefaults.standard.set(powerMode, forKey: "powerMode")
+        if wasOff { turnOff() } else { updateUI() }
+    }
     @objc func toggleBuiltIn() {
         let wasOff = isOff; turnOn()
         includeBuiltIn.toggle(); UserDefaults.standard.set(includeBuiltIn, forKey: "includeBuiltIn")
@@ -117,6 +153,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(withTitle: isOff ? "Display On" : "Display Off (no lock)", action: #selector(toggle), keyEquivalent: "").target = self
         menu.addItem(.separator())
+        let p = menu.addItem(withTitle: "Power off via DDC + virtual display", action: #selector(togglePower), keyEquivalent: "")
+        p.target = self; p.state = powerMode ? .on : .off
         let b = menu.addItem(withTitle: "Include built-in display", action: #selector(toggleBuiltIn), keyEquivalent: "")
         b.target = self; b.state = includeBuiltIn ? .on : .off
         let w = menu.addItem(withTitle: "Wake on physical mouse/keyboard", action: #selector(toggleWake), keyEquivalent: "")
