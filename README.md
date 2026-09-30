@@ -22,3 +22,9 @@ DisplayOff.app/Contents/MacOS/DisplayOff --off   # 起動と同時に消灯
 - 非公開API(DisplayServices)を使用。OS更新で動かなくなる可能性あり。
 - DDC/CI による真の電源OFFではなく「黒表示+輝度0」です(画面ロックを避けるための設計)。
 - ディスプレイによっては輝度0でも微発光します。
+
+## リリース
+`v*` タグを push すると GitHub Actions (macOS 26 ランナー) がユニバーサルバイナリをビルドし、
+`DisplayOff.zip` を Release に添付します(`git tag v0.1.0 && git push origin v0.1.0`)。
+対象: macOS Tahoe 26 以降。ad-hoc 署名のため、ダウンロード後は初回のみ
+`xattr -cr DisplayOff.app` を実行するか、右クリック→開く で起動してください。
