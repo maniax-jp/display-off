@@ -111,7 +111,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // The physical display reappears (external DDC service returns) when its button is pressed.
             self.pollTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
                 guard let self = self, Date().timeIntervalSince(self.offAt) > 5 else { return }
-                if DOBridge.externalDDCCount() > 0 { self.turnOn() }
+                let c = DOBridge.externalDDCCount()
+                if c > 0 { NSLog("DisplayOff: external display back (ddc=%d), waking", c); self.turnOn() }
             }
         }
     }
