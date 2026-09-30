@@ -1,0 +1,28 @@
+name: Build and Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: ./build.sh
+      - name: Package
+        run: ditto -c -k --keepParent DisplayOff.app DisplayOff.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DisplayOff
+          path: DisplayOff.zip
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" DisplayOff.zip --title "DisplayOff $GITHUB_REF_NAME" --generate-notes
