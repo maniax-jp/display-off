@@ -152,14 +152,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func updateUI() {
         statusItem.button?.title = isOff ? "◼︎" : "◻︎"
         let menu = NSMenu()
-        menu.addItem(withTitle: isOff ? "Display On" : "Display Off (no lock)", action: #selector(toggle), keyEquivalent: "").target = self
+        if isOff && powerMode {
+            // Only the monitor's own power button brings it back; nothing to toggle here.
+            menu.addItem(withTitle: "Display is off — press the monitor's power button", action: nil, keyEquivalent: "").isEnabled = false
+        } else {
+            menu.addItem(withTitle: isOff ? "Display On" : "Display Off (no lock)", action: #selector(toggle), keyEquivalent: "").target = self
+        }
         menu.addItem(.separator())
         let p = menu.addItem(withTitle: "Power off via DDC + virtual display", action: #selector(togglePower), keyEquivalent: "")
         p.target = self; p.state = powerMode ? .on : .off
-        let b = menu.addItem(withTitle: "Include built-in display", action: #selector(toggleBuiltIn), keyEquivalent: "")
-        b.target = self; b.state = includeBuiltIn ? .on : .off
-        let w = menu.addItem(withTitle: "Wake on physical mouse/keyboard", action: #selector(toggleWake), keyEquivalent: "")
-        w.target = self; w.state = wakeOnInput ? .on : .off
+        if !powerMode {
+            // These only apply to the brightness-0 blanking method.
+            let b = menu.addItem(withTitle: "Include built-in display", action: #selector(toggleBuiltIn), keyEquivalent: "")
+            b.target = self; b.state = includeBuiltIn ? .on : .off
+            let w = menu.addItem(withTitle: "Wake on physical mouse/keyboard", action: #selector(toggleWake), keyEquivalent: "")
+            w.target = self; w.state = wakeOnInput ? .on : .off
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit", action: #selector(quit), keyEquivalent: "q").target = self
         statusItem.menu = menu
